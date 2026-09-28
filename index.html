@@ -1,0 +1,820 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mary Berry recipe finder</title>
+<style>
+:root{--bg:#fbfaf7;--fg:#1f1f1c;--muted:#6b6a63;--line:#dcdad2;--card:#fff;--accent:#7a2e3a}
+@media (prefers-color-scheme:dark){:root{--bg:#171715;--fg:#ecebe5;--muted:#a09f96;--line:#33322d;--card:#1f1f1c;--accent:#e0a3ad}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.4 Georgia,"Times New Roman",serif}
+main{max-width:640px;margin:0 auto;padding:16px 14px 60px}
+h1{font-size:1.4rem;margin:8px 0 12px}
+input[type=search]{width:100%;padding:12px;font:inherit;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--fg)}
+input[type=search]:focus,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.books{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0}
+button{font:inherit;font-size:.85rem;padding:6px 10px;border:1px solid var(--line);border-radius:16px;background:var(--card);color:var(--fg);cursor:pointer}
+button[aria-pressed=true]{background:var(--accent);border-color:var(--accent);color:#fff}
+@media (prefers-color-scheme:dark){button[aria-pressed=true]{color:#171715}}
+#count{color:var(--muted);font-size:.9rem;margin:4px 0 8px}
+ul{list-style:none;margin:0;padding:0}
+li{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--line)}
+.t{flex:1}
+.b{display:block;color:var(--muted);font-size:.85rem}
+.s{flex:none;width:44px;height:44px;margin:-6px 0 -6px -8px;padding:0;border:0;border-radius:50%;background:none;font-size:1.5rem;line-height:1;color:var(--muted)}
+.s[aria-pressed=true]{background:none;color:var(--accent)}
+.fav{margin:0 0 0 auto}
+.p{white-space:nowrap;font-weight:bold;color:var(--accent);text-align:right}
+</style>
+</head>
+<body>
+<main>
+<h1>Mary Berry recipe finder</h1>
+<input id="q" type="search" placeholder="Search a recipe or ingredient, e.g. lamb, lemon drizzle" aria-label="Search recipes" autocomplete="off">
+<div class="books" id="books" role="group" aria-label="Filter by book"><button id="favbtn" class="fav" aria-pressed="false">★ Favourites (0)</button></div>
+<div id="count" aria-live="polite"></div>
+<ul id="results"></ul>
+</main>
+<script>
+/* DATA: one line per recipe = page|title|extra search words (optional).
+   To add a book: add an entry to BOOKS and a matching entry in DATA. */
+const BOOKS={
+ AF:"Absolute Favourites",
+ QC:"Quick Cooking",
+ FC:"Foolproof Cooking",
+ SC:"Simple Comforts",
+ N90:"Mary Berry at 90",
+ ME:"Makes it Easy"
+};
+const DATA={
+AF:`
+18|Avocado guacamole with tomato and chilli|dip starter
+18|Soured cream and herb dip|dip
+20|Cheesy cheese spirals|puff pastry cheddar
+22|Goat's cheese and shallot tarts with walnut pastry
+25|Mushroom mini Scotch eggs|egg sausage
+26|Scrambled egg and bacon tartlets
+28|Mini beef Wellingtons|beef pastry
+30|Devils on horseback|bacon prune
+32|Continental meat platter with salsa and dip|ham salami pastrami mango melon
+34|Gravadlax with mustard and dill sauce|salmon
+36|Creamy asparagus soup
+38|Tomato and basil soup
+39|Wholesome bean soup
+40-43|Tomato, mozzarella and asparagus salad with basil dressing
+44|Eggs and broccoli royale|hollandaise
+46|Garlic mushrooms and cured ham on toasted brioche
+50-53|Smoked trout, avocado and tomato tians
+54-57|Golden goat's cheese, beetroot and squash salad|butternut
+62|Roasted sausage and potato supper|red pepper
+64|Pork stroganoff
+66|Pork chops with mustard sauce
+67-69|Autumn beef pie with filo crust|tomato courgette red pepper
+70|Meatballs in tomato and basil sauce|beef
+72|Seared beef and bean sprout salad
+76|Chilli burgers|beef chili
+78-81|Cottage pie with crushed potato topping|beef
+82|Rib-eye steak with green peppercorn sauce|beef steak
+84|Harissa spiced lamb with cannellini beans
+88|Lamb fore shanks with English vegetables|carrot
+90|Canon of lamb with mint gravy
+92|Horseradish and mustard beef casserole|stew mushroom
+94|Sage and onion stuffing balls|pork sausage meat
+100|Chicken with asparagus and lemon crème fraîche sauce
+102|Mediterranean chicken thighs|red pepper
+104|Sticky chicken
+108|Pesto lemon chicken|avocado
+110-113|Spatchcock poussins with orange, sage and ginger|chicken
+114|Paprika pheasant breast with mushroom sauce
+116|Venison casserole with cherry and red wine sauce|stew
+118-120|Raised chicken and ham pie|pork sausage meat egg
+122|Turkey crown with orange|gravy christmas
+122|Turkey gravy|chicken gravy
+128|Potato salad with fresh salmon and tiger prawns|shrimp
+130|Salmon fillets on a bed of spinach with tarragon sauce
+132|Lemon sole with fennel slaw|fish
+136|Sea bass fillets with brown shrimp and caper sauce|fish
+138|Prawn and ginger noodle stir-fry|shrimp
+142-145|Crab and cod fishcakes with tomato salsa|fish
+146-148|Smoked haddock risotto|rice fish
+149-151|Fish pie with soufflé crouton topping|haddock egg
+158|Superfoods salad|beetroot broccoli
+160|Caesar salad|market tapas parmesan croutons
+160|Sun-blushed tomato and feta salad|market tapas
+160|Carrot and poppy seed salad|market tapas
+160|Celeriac remoulade|market tapas
+160|Mixed bean salad|market tapas
+160|Red pepper and toasted artichoke salad|market tapas
+164|Watermelon, feta, cucumber and mint salad
+168-170|Leek and bacon quiche
+173|Onion, courgette and blue cheese puff tarts
+174|Lentil shepherd's pie|spinach cheddar
+176|Butternut squash and lentil samb|red pepper
+178-181|Home-grown chutney|onion courgette red pepper tomato
+182|Potato wedges
+183|Asian slaw|white cabbage
+184|Celeriac and potato mash|christmas
+185|Red cabbage|apple christmas
+186|Fresh cranberry sauce|christmas
+187|Brussels sprouts, chestnut and pancetta|sprouts christmas
+194|Persian rice|apricot carrot
+196|Malay fried rice|chicken red pepper egg
+198|Saturday night pasta|chicken cheese sauce
+200|Lasagne express|spinach beef
+202-205|Seafood linguine with fresh tomato sauce|pasta prawn
+206|Paella|chicken prawn rice red pepper
+208-209|Garlic mushroom penne gratin|pasta
+212|Spicy tomato pasta
+218-220|Winter crumble tart|apple blackberry
+222-224|Apricot frangipane tart|almond
+226|Easy vanilla ice cream and variations|ice cream
+232|St Clement's posset|orange lemon
+233-235|Raspberry knickerbocker glory|blueberry
+236|Fast gooseberry fool
+238-239|Lemon meringue pie
+240-241|Pecan and ginger syrup pudding with butterscotch sauce
+242-243|Celebration chocolate mousse cake|raspberry blueberry
+244-247|Banoffee meringue roulade|banana
+248|Mini apple and almond cakes
+250-252|Chocolate chip cheesecake
+253-257|Pavlova with rosy red fruits and cassis|raspberry blackberry blueberry
+258|Cheat's Christmas apricot trifle
+264|Granny's little shortbread biscuits|almond chocolate chip lemon
+266-269|Lucy's strawberry slices|cake
+270|Ginger and sultana iced buns
+272|Mini Bakewell tarts|almond
+274|Malted chocolate cake
+276-277|Lemon drizzle cake|loaves traybake round
+278|Lemon drizzle loaves and large traybake
+279|Round lemon drizzle cake
+282-283|Tiramisu cake|mascarpone
+284|Polenta and lime cake
+286|Pecan and cinnamon ripple squares
+288|Sweet nutty twists
+289|Mulled wine
+290|Mincemeat and orange feathered tarts
+`,
+QC:`
+18|Breakfast on the go|oats berries yoghurt seeds
+21|All-in-one sausage and egg breakfast|mushroom tomato
+25|Gruyère and chive omelette|egg cheese
+26|Smoked mackerel pâté
+29|Hot-smoked salmon and avocado|lamb's lettuce
+30|Pan-fried halloumi|tomato chutney
+30|Quick fresh tomato chutney
+34|Tomato and avocado bruschetta
+34|Olive tapenade
+37|Pan-fried spiced falafel|chickpea coriander
+38|Garlic herb flatbreads|bread
+41|Spiced carrot hummus|chickpea
+45|Garlic mushroom tapas
+45|Roasted cauliflower|tapas
+46|Patatas bravas|potato tapas
+48|Artichoke-stuffed button mushrooms|cheese
+49|Mini new potatoes with blue cheese and chives
+50|Red pepper and goat's cheese tapas
+53|Roasted pepper and ricotta rolls|pastry
+54|Mini sausage rolls with thyme|pastry
+55|Brie, chutney and tomato toasties|cheese
+58|Everyday vegetable soup|carrot parsnip butternut
+59|Fennel and celeriac soup
+61|Vegetable miso soup|cabbage
+62|Vichyssoise|leek potato
+63|Smoky red pepper and bean soup|cannellini
+64|Tomato and tarragon soup
+64|Mozzarella croûtes
+67|Rather special cauliflower soup
+68|Chicken noodle soup
+70|Soup toppings|croutons croûtons melba cheese tomato paprika
+71|Melba toasts and cheesy Melba toasts|soup topping
+74|Cabbage and fennel slaw
+77|Red cabbage and apple coleslaw with walnuts
+78|Moroccan summer salad|bulgur broad beans quinoa
+81|Nutty wholemeal couscous salad|pistachio spring onion
+82|Superfood salad|lentils quinoa rice
+84|Squash, goat's cheese and quinoa salad|butternut
+85|Spiced lentils with pickled ginger
+88|Beetroot, red onion and feta salad|pine nuts
+91|Layered tomato, bean and avocado salad|green beans
+92|Asparagus, feta, pea and olive salad
+96|Crab and crayfish salad with fresh mango|lamb's lettuce cucumber
+99|Salad dressings|balsamic french lemon pesto caesar tomato basil
+104|Miso cod|fish
+106|Haddock, leek and dill filo tarts|smoked haddock
+108|Sea bass en papillote with courgette ribbons|fish
+111|Ginger teriyaki salmon
+112|Poached salmon with fragrant flageolet beans
+113|Prawn and pollock oaty herb crumble|fish shrimp
+114|King prawn and broccoli stir-fry with black bean sauce|shrimp
+117|Pan-fried scallops with leeks and tarragon
+118|Butter, lemon and dill sauce|fish sauce
+118|Chilli, garlic and tomato sauce|fish sauce
+118|Cold herb sauce|fish sauce crème fraîche
+122|Spiced chicken lettuce cups|spring onion
+124|Glazed coriander chilli chicken
+127|Chicken and asparagus fricassée|mushroom
+129|Korma-style chicken curry|almond yoghurt
+130|Dry-roasted chicken tikka|curry yoghurt
+132|Burgundy chicken|bacon onion mushroom wine stew
+133|Piquant chicken with tomato and peppers
+135|Speedy Thai chicken and vegetable curry|coconut courgette mushroom
+136|Chicken escalopes with crispy bacon
+139|Midweek chicken, mozzarella and tomato bake
+140-141|Chicken and mushroom suet crust pie|crème fraîche
+143|Roast venison with peppercorn sauce
+146|Italian galette|ham parma goat's cheese tart
+149|Marinated mango pork medallions|mango chutney
+150-151|Marinated roast fillet of pork with mustard and sage sauce
+152-153|Rack of lamb with bulgur wheat salad and spiced yoghurt sauce
+155|Minted lamb meatballs with yoghurt dip
+158-159|Lamb tagine|chickpeas apricots stew
+160-161|Marinated rosemary lamb steaks with red peppers
+162|Quick beef ragù|mince bolognese wine
+164|Thai green beef curry|coconut bamboo shoots
+165|Beef fillet with creamy Stilton and mushroom sauce|steak
+168|Mushroom and asparagus risotto|rice
+171|Crayfish and prawn nasi goreng|rice curry shrimp
+174|Romano pepper and herb penne|pasta parma ham
+177|Spaghetti alle vongole|clams pasta
+180|Spaghetti with salmon, chilli and white wine|pasta
+183|Tagliatelle with mushrooms and Stilton|pasta
+184|Rice noodle and vegetable stir-fry|pak choi
+189|Asian beef and red pepper stir-fry|noodles
+190|Classic basil pesto|pasta
+190|Spinach and walnut pesto|pasta
+192|Quick pasta sauces|tomato and basil creamy bacon and parmesan
+196|Potato cakes|carrot ginger cauliflower cheesy leek spring onion
+202|Spiced roasted squash|butternut
+204|French buttered potatoes
+206|Double potato and squash roasties|sweet potato butternut
+207|Garlic creamed spinach
+209|Spinach, cabbage and mushroom stir-fry
+212|Stir-fried pak choi with soy and sugar snap peas
+214|Vegetable kebabs|courgette
+216|Pan-fried Little Gem lettuce
+218|Chargrilled aubergines
+221|Cauliflower, aubergine and lemon grass Thai curry|sweet potato coconut
+224|Gooseberry and elderflower fool|cream
+226|Oven-baked peaches with Marsala and almonds
+228|Upside-down rhubarb pudding
+228|Caramel sauce
+231|Glazed pineapple with rum and lime
+233|Passion fruit and orange cheesecake
+234|Rum and raisin ice cream|condensed milk
+238-239|Blackberry and custard money bags|filo mascarpone almond
+240|Pear, ginger and almond brioche tart
+243|Limoncello trifle|raspberry mascarpone
+244|Indulgent chocolate surprise
+246|Chocolate cappuccino tart|coffee
+249|Piccoli tiramisù|coffee mascarpone
+250|Chocolate fudge sauce|dessert sauce
+250|Toffee sauce|dessert sauce
+250|White chocolate sauce|dessert sauce
+251|Fresh vanilla custard
+251|Raspberry coulis
+254|Ginger oat crunch biscuits|oats
+255|Light carrot and cinnamon cupcakes|cream cheese icing
+258|Blueberry American muffins
+261|Apricot buns with lemon icing
+263|Orange, lemon and lime cupcakes
+264|Fast cheesy herb muffins|olives
+266|Figgy oat squares
+268|Cherry, almond and chocolate 10-minute squares
+270|Scone fruit crown|sultanas
+273|Apple and lemon sandwich cake
+274|Chocolate chip traybake|icing
+277|White chocolate and hazelnut traybake
+278|Cake icings|vanilla mascarpone coffee buttercream lemon white chocolate chocolate fudge ganache cream cheese frosting
+282|Lemon curd|jar
+`,
+FC:`
+12|Herb flatbread with mozzarella and asparagus
+15|Tomato and basil salad with whipped goat's cheese and Parma ham
+16|Party ploughman's|ham cheese
+18|Continental sharing platter with baked Camembert|ham
+18|Red pepper dip
+19|Giant cheese and Parma ham straws|pastry
+22|Sausage and caramelised onion mini pasties
+25|Smoked salmon, avocado and cucumber canapés
+26|Watermelon, feta and mint stacks
+28|Prawn and avocado lettuce cups|shrimp
+29|Roasted aubergine and garlic chilli dip
+30|Toasted nuts and seeds
+34|Cheese and garlic tear-and-share scones
+37|Olive and herb soda bread
+38-40|Bread and yeast breadmaking
+42|Ten-minute tomato soup
+45|Roasted butternut squash soup
+46|Chicken noodle laksa|soup
+48|Curried beetroot soup
+49|Crayfish marinière on sourdough
+50|Mackerel pâté with lime
+53|Smoked haddock and egg mousse
+53|Caper vinaigrette
+54|Lobster tails with tarragon aioli and asparagus
+57|Crab quenelles with samphire
+58|Old-fashioned ham hock terrine|ham
+62|Spiced, blackened salmon
+65-66|Salmon and herb coulibiac|rice
+67|Smoked haddock and sweetcorn chowder|soup potato
+68|Salmon fillets with herbs and red pepper
+70-72|Fish techniques|grilling roasting poaching en papillote pan-frying
+74|Monkfish fillets with mushroom and bacon sauce
+77|Sea bass with lime and dill butter
+80|All-in-one fish gratin|potato mushroom cheese
+84|Spiced chicken skewers with tzatziki|kebab
+87|Smoked Texan chicken wings
+89-91|Chicken and bacon lattice pie
+92|Chicken cordon bleu|ham cheese
+95|Chicken schnitzel with fried egg|egg
+96|Stuffed chicken thighs with lemon sauce|sausage meat
+99|Thai chicken curry|coconut
+100|Chicken, red wine and garlic casserole|bacon mushroom stew
+103|Whole roast chicken with lemon and herbs|herb butter
+105|Chicken stock
+106|Turkey Waldorf salad
+109|Hot turkey and avocado bake
+110|Venison steaks with blackberry sauce
+113|Two-hour game bolognaise|pasta
+116|Pork, apple and Stilton parcels|ham
+119|Pork chops with mushroom crust
+120|Sausage and onion cassoulet|butter beans
+121|Pork fillet pie with mushrooms and mash
+122|Roast rack of pork with sage and lemon rub|gravy crackling
+125|Gammon with mustard and orange sauce|ham
+126|Boiled beef and carrots|mustard-parsley sauce
+129-131|Beef Wellington with tarragon sauce|mushroom
+132|Beef stir-fry with ribbon vegetables|noodles
+135|Mexican tortilla bake|beef chilli
+136|Catalan beef|stew
+138-139|Roasting meat|stews crackling
+140|Grilling meat and stir-frying meat
+143|Sweet smoked paprika lamb with borlotti beans|stew
+144|Lamb burgers with mint mayo and tomato relish
+146|Madeira lamb kidneys
+147-149|Slow-roast shoulder of lamb with flageolet beans
+151|Butterflied leg of lamb with preserved lemons
+154|Express bacon and pesto pasta|broccoli
+157|Baked macaroni cheese with tomatoes|mac and cheese
+158|Garden tagliatelle|courgette mushroom
+161|Tuna and spinach linguine|pasta
+162-164|Pasta and rice techniques|risotto
+166|Creamy roasted pepper pasta with feta and olives
+167|Lebanese rice salad|broad beans
+168|Salmon, fennel and pea risotto|rice
+171|Jasmine rice with prawns and pak choi|shrimp
+175|Saturday lunch tuna salad
+176|Oriental vegetable and noodle salad
+178-180|Roasted vegetable quiche|pepper
+181|Middle Eastern aubergine and chickpea salad
+184|Broad bean, pea and asparagus salad
+186|Warm broccoli and tomato salad
+187|Savoy cabbage stir-fry with ginger
+189|Red lentils with chilli and ginger
+190|Hasselback potatoes
+193|Bubble and squeak potato cakes|cabbage
+194|Garlic crushed new potatoes
+196-199|Vegetable techniques|steaming braising chargrilling sautéing stir-frying roasting
+200|Posh roasted vegetables|aubergine pepper butternut celeriac
+203|Roasted cauliflower with lemon parsley dressing
+204|Rosemary-roasted beetroot
+207|Spiralized vegetables|carrot courgette
+208|Creamed spinach
+209|Rainbow coleslaw|cabbage carrot
+212|Passion fruit pots|cream cheese
+215|Mango, lemon and lime mousse
+216|Lemon and elderflower jellies|gelatine
+219-220|Summer party gateau|cake blueberry raspberry
+221|White chocolate ice cream
+222|Blackberry ripple|yoghurt cream
+225|Real honeycomb ice cream
+226-227|Foolproof desserts|custard ice cream
+228|Pineapple, raspberry and mint boats
+230|Baked boozy nectarines|marzipan brandy
+233|Ginger semifreddo with poached pears
+234|Crème caramel|custard
+237|Latte panna cotta|coffee cream
+237|Hazelnut brittle
+240|Brioche bread and butter pudding
+243|Rhubarb Eve's pudding
+246|Apple frangipane tart|almond
+249|Apple and apricot pie
+250-251|Shortcrust pastry|pie tart
+252|Spiced apple and mincemeat strudel
+256|Banana and honey galettes
+258|Mini chocolate tarts
+260|Mini lemon tarts
+261-263|Crème brûlée tart|caramel
+264|Apple and blackberry cobbler
+269|Gluten-free apple and coconut cake
+270|Carrot and banana cake
+273|Fruitcake loaves|sultanas fruit
+274|Holiday banana cake
+277-278|Cardamom sponge with white chocolate icing
+279|Easter Simnel cake|marzipan fruit
+280|Bonfire chocolate traybake|almond
+283|Red velvet cupcakes|buttermilk
+285-286|Icing cakes
+287|Chocolate and cherry biscuits
+289|Ginger and white chocolate florentines
+290|Two-tone toffee chews|marshmallow rice cereal
+293|Sweet lemon crisps|pastry
+294|Cranberry and coconut energy bars|oats
+297|Stem ginger shortbread
+298|Shrewsbury biscuits
+300|Hot cross buns
+304-305|Foolproof store cupboards
+306-309|Freezing guides
+`,
+SC:`
+22|Marigold soup|butternut carrot
+24|Warming chicken noodle soup
+26|Mushroom and leek soup
+29|Emerald Isle garden soup|courgette pea pepper leek
+30|Double-baked mushroom soufflés|cheese
+33|Rustic smoked trout and anchovy pâté
+34|Spinach frittata quiche|egg
+36|Stuffed portabella mushrooms with Brie and spinach|parma ham
+38|Pea and mint dip|chickpeas
+41|Croque Monsieur|ham cheese bread
+42|Burrata with heritage tomato salad|bloody mary dressing
+44|Toasted muffins with scrambled eggs and smoked salmon
+48|Preserved lemon chicken
+50|Roast chicken with tarragon butter and melting onions|gravy
+52|Chicken hot pot with potato topping
+55|Mild curried chicken with grapes and asparagus
+56|Five-spiced chicken with coriander and cucumber relish
+59|Mexican chicken and avocado sharing platter|wraps salsa
+60|Sri Lanka chicken curry|coconut
+62|Warm chicken Caesar, bacon and avocado wraps
+64|Open chicken, bacon and avocado sandwich|maple dressing
+67|Smoky firecracker chicken drumsticks
+68|Stir-fried chicken and vegetable rice
+70|Chicken and fennel fricassée with tarragon
+72|Warm chicken and dill salad|mustard parmesan dressing
+75|Duck salad with hoisin dressing|watermelon lettuce
+76|Pheasant and port stew|game
+78|Spiced quail with coriander dressing|game yoghurt
+82|Crab linguine|pasta chilli lime
+84|Crab and herb blinis with pickled fennel herb salad
+87|Hot smoked salmon and asparagus salad|avocado egg fennel mustard dressing
+88|Grilled garlic prawns and Mediterranean vegetables|shrimp courgette pepper garlic butter
+91|Seafood risotto|prawn mussels rice
+92|Roasting tin Thai salmon and vegetables|coconut milk courgette
+94|Salmon and fennel one-pot wonder|pea
+96|Haddock and shrimp feast|rice spinach
+99|Thai cod cakes|fish thai basil and lime sauce
+100|Whole stuffed baked trout with caper butter|fish
+102|Salmon fillets with cauliflower cheese topping
+105|Cod goujons with caper herb dip|fish mayonnaise
+106|Glorious fish pie|haddock smoked haddock egg leek potato
+110|Spicy sausage rolls|pastry
+112|Baked pasta lasagne rolls|tomato sauce mushroom spinach sausage meat
+114|Swedish meatballs with enriched apple and thyme sauce|pork beef
+117|Sausage and red pepper hot pot|potato
+118|Marinated harissa and yoghurt pork kebabs|marinade
+122|Slow-roast hand and spring with crackling|pork onion gravy
+124|Pork en croute with Stilton and apple|pastry
+126|Orange-glazed ham with mango and orange salsa|gammon
+128|Bolognese bake|beef mince pasta cheese
+130|Smoky beef casserole with black-eyed beans|stew
+132|Mustard steak with vine tomatoes|beef béarnaise
+135|Mexican chilli con carne|beef kidney beans
+136|Cottage pie with a bit of a kick|beef potato port
+138|Boeuf Bourguignon|beef stew bacon shallots wine mushroom
+140|Matchday beef and ale shortcrust pie|beer
+143|Braised lamb with sweet potato and haricot beans|curry stew
+144|French slow-roast lamb with ratatouille|aubergine pepper courgette
+147|Rack of lamb with garlic minted potatoes|gravy
+148|Mustard kidneys
+152|Veggie burgers|butterbeans kidney beans
+154|Mac 'n' cheese|macaroni
+156|Orzo salad with grilled vegetables and olives|aubergine lemon herb dressing
+159|Penne pasta with peppers, garlic mushrooms and asparagus
+160|Mushroom, lentil and double potato jumble|sweet potato
+163|Golden cauliflower steaks with tomato and garlic salsa
+164|Sweet potato and spinach pithivier|pastry
+166|Onion, artichoke and sage open tart
+168|Paneer and roasted vegetable curry|cauliflower
+171|Mixed bean and butternut wraps|squash
+172|Posh jacket potatoes|pesto goat's cheese spring onion
+175|Cauliflower, broccoli and leek Mornay|cheese sauce
+176|Leek and dill quiche|pastry
+178|Super veg with brown rice and herbs|butternut fennel
+182|Squash and parsnip roasties|butternut
+184|Fragrant lemongrass and coriander rice
+186|Ridged garlic potatoes
+189|Colcannon mash|cabbage spring onion potato
+190|The best roast potatoes
+193|Yorkshire pudding
+194|Potato wedges with soured cream chive dip
+196|Split roasted butternut squash with chilli garlic butter
+198|Carrot and swede purée
+201|Sweet potato skinny fries
+202|Pickled beetroot
+204|Golden roasted vegetables|beetroot butternut parsnip sweet potato cauliflower
+206|Simmered red cabbage and cider
+209|Stir-fried aromatic Hispi cabbage
+210|Greek salad with feta and olive tapenade
+212|Roasted pepper and tomato salad with broad beans|rocket basil garlic dressing
+215|Rosy-pink beetroot, feta and olive salad
+216|Roasted pepper, mushroom and broccoli brown rice salad
+220|Celebration trifle|custard pear raspberry cream
+222|Lemon posset tart with fresh raspberries
+224|Divine white chocolate chilled cheesecake|cream cheese
+227|Wild bramble mousse|blackberry cream
+228|Lemon and blueberry mousse with hazelnut and oat topping
+231|Irish Cream and cherry pots|cream cheese
+232|Chocolate and raspberry layered pots
+234|Lemon ripple ice cream
+237|Decadent orange, chocolate and whisky mousse
+238|Warming autumn fruit compote|apple plum blackberry
+240|Brioche frangipane apple pudding|almond
+242|Bread and butter pudding with pecan maple topping|sultanas
+245|Toffee pear pudding|caramel
+246|Chocolate steamed pudding with chocolate sauce
+248|Apple and blackberry crumble
+250|Rustic apple tart
+253|Real pouring custard
+256|Bakewell tart fingers|almond raspberry jam
+258|Lemon shortbread with raspberries and cream|biscuit
+260|Cranberry, orange and pistachio biscuits
+263|Orange shortbread fingers|biscuit
+264|Tiny chocolate cupcakes|chocolate icing
+267|Chocolate and strawberry dessert cake
+268|Chocolate yoghurt cake|butter icing
+270|Coffee and hazelnut praline cake|caramel buttercream
+273|Granny's gingerbread|treacle
+274|Passion fruit lemon cake
+276|Tea loaf with cranberries and sultanas
+278|Irish soda bread|buttermilk
+281|Focaccia with olives, tomatoes and rosemary|bread
+`,
+N90:`
+20|French onion and celery soup|beef stock
+23|Beef stock
+23|Chicken stock
+24|Thai spiced beetroot soup|coconut
+27|Really special cauliflower soup|mustard chives
+28|Curried butternut squash soup|coconut
+31|Smoked salmon and brown shrimp canapés|rye bread horseradish
+32|Smoked salmon canapés
+34|Crab and dill blinis|crème fraîche capers
+34|Sun-dried tomato blinis
+37|Warm Marie Rose prawn crostini|shrimp
+38|Cashew nutters|biscuits mustard semolina
+42|Parmesan and thyme biscuits
+45|Arancini with dolcelatte and porcini mushrooms|rice
+48|Smoked salmon and asparagus with herb sauce|quail eggs
+51-53|Little tartlets three ways|brie tomato basil cheese onion garlic mushroom chive parmesan pastry
+58|Skate wing with caper sauce and samphire|fish
+61|Family fish pie|haddock prawns potato
+64|King prawn and fresh tomato curry|shrimp
+67|Seared teriyaki tuna with ribbon vegetable salad|rocket
+69|Baked salmon with Parmesan crust
+74|Celebration salmon with herb mayonnaise
+77|Gravadlax with mustard dill sauce|salmon
+82|Horseradish beef cheeks|casserole celery
+85|Classic beef lasagne|mozzarella red wine
+88|Beef bourguignon|bacon shallots mushrooms red wine brandy stew
+91|Braised beef with cauliflower and potato mash|stew
+92|Fillet tails of beef with béarnaise sauce and rocket salad|steak
+96|Penne pasta with Parma ham and broccoli
+98|Lasagne al forno with spinach|pork sausagemeat
+100|Leek, ham and mustard tart|filo
+103|Traditional Irish stew|lamb potato
+105|Burford lamb shanks|sweet potato mushrooms
+108|Lamb tagine with chickpeas and coriander|apricots preserved lemons
+110|Turkey, sage and onion pasties|puff pastry
+113|Glenmore pheasant|port game
+118|Chicken Normande|apple brandy cider
+121|Nasi goreng|rice bacon prawn egg
+123|Watercroft chicken|lime marmalade
+126|Taleggio chicken with pesto and roasted vine tomatoes|breadcrumbs
+129|Pepper pot chicken|paprika soured cream
+130|Fragrant chicken traybake|aubergine lemongrass coconut
+132|Rich red chicken curry|lentils passata
+136|My version of Coronation chicken|mango chutney curry
+138|Hot American chicken salad|crisps mayonnaise
+144|Veggie mushroom lasagne
+147|Vegetable pad Thai|noodles peanuts tamarind bean sprouts
+148|Freezer mac and cheese|macaroni
+153|Orzo with roasted vegetables|courgette squash
+154|Hearty lentil vegetable broth|soup chestnuts leek
+157|Tomato and asparagus galette|boursin puff pastry
+160|Primavera risotto|rice courgette
+163|Cauliflower and potato curry|spinach
+164|Burrata Caprese sharing platter|tomato
+172|Californian salad|prawns kale radishes cucumber
+174|Burrata salad with peas, beans and pesto dressing|green beans lambs lettuce
+177|Caesar salad with crispy bacon|anchovies croutons
+180|Simple green leaf salad|chicory dressing
+183|Grilled asparagus with jambon de Parme|onion marmalade ham
+184|Roasted beets, squash and onions|beetroot butternut
+186|Tenderstem broccoli
+188|Roasted fennel and potato garlic gratin
+191|Glazed honey and mustard carrots
+192|Carrot and sweet potato purée
+192|Creamed celeriac
+196|Emerald veg with garlic and sesame seeds|green beans peas
+199|The best potato Dauphinoise|cream cheese
+204|Ginger flapjacks|oats
+207|Best brownies|chocolate
+210|Carrot cake with frosting|walnuts pecans cream cheese ginger
+212|Red velvet traybake|buttermilk
+215|Lemon drizzle cake
+219|Fabulous chocolate and cherry cake|ganache cherry jam
+220|Victoria sponge sandwich|strawberry jam
+224|Raspberry and white chocolate chip cupcakes
+227|Mary's best scones
+228|Christmas shortbread|semolina
+230|Shortbread|semolina
+232|Mini mincemeat cakes|marzipan
+238|Lemon and lime chilled cheesecake|hobnob mascarpone
+241|New York cheesecake with strawberries|digestive
+244|Thomas's flan|condensed milk digestive
+247|Chocolate and Baileys pot|mascarpone
+248-251|Ginger ice cream
+252-254|Classic crème caramel|custard
+256|The ultimate chocolate roulade
+259-260|Wonderful apple and almond cake
+262|Blush strawberry pavlova|meringue
+265|Canterbury tart|apple lemon
+273-277|Lemon meringue pie|shortcrust
+278|Crème brûlée|custard
+280|Banoffee pie|condensed milk caramel banana
+283-284|Bread and butter pudding|sultanas lemon
+286|Divine lemon pots|raspberries
+289|Raspberry soufflés|crème de framboise
+290|Scarlet fruit compote with honey yoghurt|blueberries figs grapes nectarines strawberries
+290|Raspberry coulis
+`,
+ME:`
+16|Cucumber and crab bites|capers
+19|Smoked salmon canapé sandwiches|cream cheese
+21|Sweet chilli prawn canapés|shrimp
+22|Grilled lemon edamame beans
+31|Somerset cheddar cheese straws|parmesan
+32|Dolcelatte and sage scone canapés
+34|Classic basil pesto dip|dip parmesan pine nuts
+34|Soured cream and chive dip
+35|Gazpacho|soup tomato cucumber
+37|Guacamole|dip avocado
+37|Hummus dip|chickpeas dip
+38|Red pepper dip
+38|Sausage nuggets with red pepper sauce|pork
+41|Watermelon, feta and Parma ham
+42|Three flavoured butters|black olive branston pickle chilli garlic
+26|Smart chestnut mushroom soup
+28|Thai green chicken noodle soup|curry paste mushrooms
+45|Crayfish and avocado cocktail|cocktail sauce shrimp
+47|Fabulous fish sharing platter|salmon prawns smoked salmon quail eggs dill pickle lemon chive dressing
+52|Salmon and herbed hollandaise pavé
+55|Cold salmon fillets with cucumber and dill sauce|yoghurt
+56|Lemon and caper salmon linguine|pasta pine nuts
+59|Cod and spinach with gremolata|fish panko
+60|Side of salmon with hoisin vegetables|radishes mangetout sweet chilli sauce
+62-63|Posh salmon and prawn fishcakes with tomato salsa|potato spinach
+65|Goat's cheese, asparagus and smoked salmon tarts|puff pastry
+66|Seabream with samphire and chive cream sauce|fish
+68|All-in-one lemon pepper cod|fish potato tomato herb sauce
+71|Tiger prawn and coriander courgetti|shrimp
+73|Crispy squid with aioli|semolina
+79|Easy peasy one-pot chicken|fennel pepper
+80|Hoisin chicken with pancakes|spring onion cucumber
+82|Chicken tartiflette|reblochon potato bacon
+85|Chicken and ham burgundy pie|leek puff pastry
+86|Chicken escalope with tzatziki|cucumber mint
+88|Chicken satay-style curry|peanut butter coconut milk
+91|Creamy lemon tarragon chicken|crème fraîche
+92|Harissa chicken and red rice salad|carrot
+95|Italian chicken|dolcelatte pepper tomato
+96|Lucinda's chicken curry|curry
+99|Chicken legs with smoky bulgur wheat|chorizo
+101|Chicken and broccoli stir-fry|baby corn carrot mushrooms tenderstem
+106|Meatball toad in the hole with sage|sausage pork
+109|Pork tacos with avocado salsa|coriander
+110|Bacon and mushroom cheese soufflé|pork egg
+112|Pork chops with mushroom sauce
+115|Miso steak with asparagus salad|beef carrot
+116-117|Beef and aubergine crunchy top filo pie|cream cheese tomato
+118|Thai basil beef stir-fry|baby corn coconut cream
+121|Beef cannelloni with basil and mozzarella|pasta tomato mushrooms
+122-123|Beef cobbler with horseradish|squash stew
+125|Lamb steaks with roasted vegetable and feta rice|aubergine pepper
+126|Fast-roast rosemary leg of lamb
+128|Friday night lamb curry|lentils
+130|Slow-braised lamb with tomatoes and borlotti beans|stew
+136|Spinach dhal|puy lentils
+139|Warming Welsh rarebit|cheese bread toast
+140|Classic tomato and basil spaghetti|pasta
+142|Aubergine bhuna curry|potato tomato
+144-145|Wild mushroom, spinach and Roquefort pasta bake|parmesan cream cheese
+147|Mixed bean and red pepper chilli|sweetcorn tomato pepper
+149|Spaghetti with veggie ragu|courgette spinach pasta
+150|Humble pie|cauliflower leek pea leeks
+153|Roasted vegetable Wellington|squash goat's cheese
+154|Ciabatta tricolore|bread avocado tomato sun-dried
+157|Sweet potato and celeriac spiralized linguine|feta pasta
+158|Nourish bowls|carrot beetroot avocado chia seeds edamame feta rice sweet potato
+161|Super quick brown rice veg stir-fry|carrot sugar snap peas
+163|Golden mushroom and halloumi|red onion marmalade
+164|Spiced grilled aubergine with tahini dressing
+170|Kale and pak choi stir-fry
+173|Carrot and beetroot slaw with lemon and coriander|balsamic dressing
+174|Glorious greens with almonds and seeds|broccoli peas sugar snap peas
+177|Quinoa and soya bean salad with preserved lemon dressing|feta gherkins
+178|Mini dauphinoise potatoes
+181|Honey-glazed roasted parsnips and carrots
+182|Twice-cooked golden roast potatoes
+184|Sprouts with peas and cashew nuts
+187|Spiced red cabbage|apple juice
+189|Roasted cauliflower salad with grainy mustard dressing|mayonnaise
+190|Savoy cabbage and celeriac stir-fry
+193|Avocado Caesar salad|anchovies parmesan sourdough croutons caesar dressing
+194|Beefsteak tomato salad with balsamic dressing
+196|Garlic summer veg|courgettes
+199|Swede and carrot purée
+204|Apple and mincemeat squares
+207|Bara brith|fruit cake teabread raisins sultanas cranberries
+208|Very berry Christmas fruit cake|currants blueberries cranberries raisins
+210-211|Bûche de Noël|hazelnuts chocolate cream christmas
+213|Elderflower and lemon traybake
+214-215|Grown-up chocolate birthday cake
+219|Madeleines
+220|Walnut and coffee sandwich cake
+222-223|Red velvet sandwich cake|buttermilk cream cheese
+225|Ginger treacle butterfly cupcakes
+226|Chocolate chip oat cookies
+229|Old-fashioned flapjacks with apricots|oats
+231|Spiced squash and walnut loaf|butternut raisins
+236|Passion fruit flummery
+238-239|Chocolate perfection|cream cheese digestive raspberry coulis
+241|Quick limoncello ice cream|condensed milk
+242|Super quick raspberry parfait|cassis
+245|Mascarpone ice cream with bitter chocolate sauce
+247|Lemon and mango brûlée top|condensed milk
+248|Key lime tranche|condensed milk digestive lime
+251|Strawberry and cream ripple pavlova|meringue
+252|Orange with boozy orange cream|orange liquor
+254|Celebration trifle|amaretti cherries pears sherry strawberry jam custard
+257|Sunset fruit platter|blueberries grapes mango pineapple raspberries strawberries
+258|St Clements creams|lemon orange
+264|Apricot Portuguese tarts|puff pastry custard
+266|Red fruit and almond puddings
+269|Traditional syrup and lemon steamed pudding
+270|Apple crumble
+273|Maple and orange pudding
+275|Express apple and pear open pie|lemon curd puff pastry
+276|Rum baked bananas
+279|Hot chocolate pudding with white chocolate cream
+`
+};
+const SYN={shrimp:"prawn",prawns:"shrimp",eggplant:"aubergine",zucchini:"courgette",cilantro:"coriander",garbanzo:"chickpea",scallion:"spring onion",arugula:"rocket",mince:"beef",molasses:"treacle",biscuit:"cookie",cookie:"biscuit"};
+const norm=s=>s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[’']/g,"").replace(/[^a-z0-9 ]+/g," ");
+const stem=w=>w.length<4?w:/ies$/.test(w)?w.slice(0,-3)+"y":/oes$/.test(w)?w.slice(0,-2):/ss$/.test(w)?w:w.replace(/s$/,"");
+const ALL=[];
+for(const [code,txt] of Object.entries(DATA)){
+  txt.trim().split("\n").forEach(l=>{
+    const [page,title,extra=""]=l.split("|");
+    const hay=norm(title+" "+extra).split(/\s+/).map(stem).join(" ");
+    ALL.push({code,page,title,hay,id:code+'|'+page+'|'+title});
+  });
+}
+ALL.sort((a,b)=>a.title.localeCompare(b.title)||a.code.localeCompare(b.code));
+let active=new Set(Object.keys(BOOKS));
+let favs=new Set();
+try{favs=new Set(JSON.parse(localStorage.getItem("mb-favs")||"[]"))}catch(e){}
+function saveFavs(){try{localStorage.setItem("mb-favs",JSON.stringify([...favs]))}catch(e){}}
+let favOnly=false;
+const q=document.getElementById("q"),res=document.getElementById("results"),cnt=document.getElementById("count"),bk=document.getElementById("books");
+function esc(s){return s.replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]))}
+function render(){
+  const terms=norm(q.value).split(/\s+/).filter(Boolean).map(stem);
+  const rows=ALL.map((r,i)=>({...r,i})).filter(r=>(!favOnly||favs.has(r.id))&&active.has(r.code)&&terms.every(t=>r.hay.includes(t)||(SYN[t]&&r.hay.includes(stem(SYN[t])))));
+  cnt.textContent=rows.length+(rows.length===1?" recipe":" recipes");
+  const fb=document.getElementById("favbtn");fb.textContent="★ Favourites ("+favs.size+")";fb.setAttribute("aria-pressed",favOnly);
+  res.innerHTML=rows.map(r=>`<li><button class="s" data-i="${r.i}" aria-pressed="${favs.has(r.id)}" aria-label="${favs.has(r.id)?'Remove from favourites':'Add to favourites'}">${favs.has(r.id)?'★':'☆'}</button><span class="t">${esc(r.title)}<span class="b">${BOOKS[r.code]}</span></span><span class="p">p. ${r.page}</span></li>`).join("")||(favOnly&&!favs.size?"<li>No favourites yet. Tap the star next to a recipe to add it.</li>":"<li>No matches. Try a shorter word, or turn on more books.</li>");
+}
+Object.entries(BOOKS).forEach(([code,name])=>{
+  const b=document.createElement("button");
+  b.textContent=name;b.setAttribute("aria-pressed","true");
+  b.onclick=()=>{
+    if(active.has(code)){active.delete(code)}else{active.add(code)}
+    b.setAttribute("aria-pressed",active.has(code));render();
+  };
+  bk.insertBefore(b,document.getElementById("favbtn"));
+});
+q.addEventListener("input",render);
+res.addEventListener("click",e=>{
+  const b=e.target.closest(".s");if(!b)return;
+  const id=ALL[+b.dataset.i].id;
+  if(favs.has(id))favs.delete(id);else favs.add(id);
+  saveFavs();render();
+});
+document.getElementById("favbtn").onclick=()=>{favOnly=!favOnly;render()};
+render();
+</script>
+</body>
+</html>
